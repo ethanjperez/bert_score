@@ -24,19 +24,16 @@ from .utils import (
 )
 
 
-__all__ = ["score_setup", "score", "plot_example"]
+__all__ = ["precompute_idf", "score", "plot_example"]
 
 
-def score_setup(
+def precompute_idf(
+    refs,
     model_type=None,
-    num_layers=None,
     verbose=False,
     idf=False,
-    device=None,
     nthreads=4,
-    all_layers=False,
     lang=None,
-    refs_without_repeats=None
 ):
     """
     BERTScore metric.
@@ -73,18 +70,11 @@ def score_setup(
     if model_type is None:
         lang = lang.lower()
         model_type = lang2model[lang]
-    if num_layers is None:
-        num_layers = model2layers[model_type]
 
     if model_type.startswith("scibert"):
         tokenizer = AutoTokenizer.from_pretrained(cache_scibert(model_type))
     else:
         tokenizer = AutoTokenizer.from_pretrained(model_type)
-
-    model = get_model(model_type, num_layers, all_layers)
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
 
     if not idf:
         idf_dict = defaultdict(lambda: 1.0)
@@ -99,11 +89,11 @@ def score_setup(
         if verbose:
             print("preparing IDF dict...")
         start = time.perf_counter()
-        idf_dict = get_idf_dict(refs_without_repeats, tokenizer, nthreads=nthreads)
+        idf_dict = get_idf_dict(refs, tokenizer, nthreads=nthreads)
         if verbose:
             print("done in {:.2f} seconds".format(time.perf_counter() - start))
 
-    return {'tokenizer': tokenizer, 'model': model, 'idf_dict': idf_dict}
+    return idf_dict
 
 
 def score(
