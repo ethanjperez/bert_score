@@ -145,7 +145,7 @@ def score(
     assert len(cands) == len(refs), "Different number of candidates and references"
 
     assert lang is not None or model_type is not None, "Either lang or model_type should be specified"
-
+    import ipdb; ipdb.set_trace()
     ref_group_boundaries = None
     if not isinstance(refs[0], str):
         ref_group_boundaries = []
