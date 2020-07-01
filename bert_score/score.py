@@ -176,6 +176,8 @@ def score(
         model_type = lang2model[lang]
     if num_layers is None:
         num_layers = model2layers[model_type]
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if load_setup is not None:
         tokenizer = load_setup['tokenizer']
@@ -188,8 +190,6 @@ def score(
             tokenizer = AutoTokenizer.from_pretrained(model_type)
 
         model = get_model(model_type, num_layers, all_layers)
-        if device is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
         model.to(device)
 
         if not idf:
