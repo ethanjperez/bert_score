@@ -110,7 +110,8 @@ def score(
     lang=None,
     return_hash=False,
     rescale_with_baseline=False,
-    load_setup=None,
+    model=None,
+    return_model=False,
 ):
     """
     BERTScore metric.
@@ -166,38 +167,35 @@ def score(
         model_type = lang2model[lang]
     if num_layers is None:
         num_layers = model2layers[model_type]
+
+    if model_type.startswith("scibert"):
+        tokenizer = AutoTokenizer.from_pretrained(cache_scibert(model_type))
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_type)
+
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    if load_setup is not None:
-        tokenizer = load_setup['tokenizer']
-        model = load_setup['model']
-        idf_dict = load_setup['idf_dict']
-    else:
-        if model_type.startswith("scibert"):
-            tokenizer = AutoTokenizer.from_pretrained(cache_scibert(model_type))
-        else:
-            tokenizer = AutoTokenizer.from_pretrained(model_type)
-
+    if model is None:
+        print('Loading model...')
         model = get_model(model_type, num_layers, all_layers)
         model.to(device)
 
-        if not idf:
-            idf_dict = defaultdict(lambda: 1.0)
-            # set idf for [SEP] and [CLS] to 0
-            idf_dict[tokenizer.sep_token_id] = 0
-            idf_dict[tokenizer.cls_token_id] = 0
-        elif isinstance(idf, dict):
-            if verbose:
-                print("using predefined IDF dict...")
-            idf_dict = idf
-        else:
-            if verbose:
-                print("preparing IDF dict...")
-            start = time.perf_counter()
-            idf_dict = get_idf_dict(refs, tokenizer, nthreads=nthreads)
-            if verbose:
-                print("done in {:.2f} seconds".format(time.perf_counter() - start))
+    if not idf:
+        idf_dict = defaultdict(lambda: 1.0)
+        # set idf for [SEP] and [CLS] to 0
+        idf_dict[tokenizer.sep_token_id] = 0
+        idf_dict[tokenizer.cls_token_id] = 0
+    elif isinstance(idf, dict):
+        if verbose:
+            print("using predefined IDF dict...")
+        idf_dict = idf
+    else:
+        if verbose:
+            print("preparing IDF dict...")
+        start = time.perf_counter()
+        idf_dict = get_idf_dict(refs, tokenizer, nthreads=nthreads)
+        if verbose:
+            print("done in {:.2f} seconds".format(time.perf_counter() - start))
 
     if verbose:
         print("calculating scores...")
@@ -241,6 +239,8 @@ def score(
     if return_hash:
         return tuple([out, get_hash(model_type, num_layers, idf, rescale_with_baseline)])
 
+    if return_model:
+        return out, model
     return out
 
 
