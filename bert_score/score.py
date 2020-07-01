@@ -24,7 +24,86 @@ from .utils import (
 )
 
 
-__all__ = ["score", "plot_example"]
+__all__ = ["score_setup", "score", "plot_example"]
+
+
+def score_setup(
+    model_type=None,
+    num_layers=None,
+    verbose=False,
+    idf=False,
+    device=None,
+    nthreads=4,
+    all_layers=False,
+    lang=None,
+    refs_without_repeats=None
+):
+    """
+    BERTScore metric.
+
+    Args:
+        - :param: `cands` (list of str): candidate sentences
+        - :param: `refs` (list of str or list of list of str): reference sentences
+        - :param: `model_type` (str): bert specification, default using the suggested
+                  model for the target langauge; has to specify at least one of
+                  `model_type` or `lang`
+        - :param: `num_layers` (int): the layer of representation to use.
+                  default using the number of layer tuned on WMT16 correlation data
+        - :param: `verbose` (bool): turn on intermediate status update
+        - :param: `idf` (bool or dict): use idf weighting, can also be a precomputed idf_dict
+        - :param: `device` (str): on which the contextual embedding model will be allocated on.
+                  If this argument is None, the model lives on cuda:0 if cuda is available.
+        - :param: `nthreads` (int): number of threads
+        - :param: `batch_size` (int): bert score processing batch size
+        - :param: `lang` (str): language of the sentences; has to specify
+                  at least one of `model_type` or `lang`. `lang` needs to be
+                  specified when `rescale_with_baseline` is True.
+        - :param: `return_hash` (bool): return hash code of the setting
+        - :param: `rescale_with_baseline` (bool): rescale bertscore with pre-computed baseline
+
+    Return:
+        - :param: `(P, R, F)`: each is of shape (N); N = number of input
+                  candidate reference pairs. if returning hashcode, the
+                  output will be ((P, R, F), hashcode). If a candidate have
+                  multiple references, the returned score of this candidate is
+                  the *best* score among all references.
+    """
+    assert lang is not None or model_type is not None, "Either lang or model_type should be specified"
+
+    if model_type is None:
+        lang = lang.lower()
+        model_type = lang2model[lang]
+    if num_layers is None:
+        num_layers = model2layers[model_type]
+
+    if model_type.startswith("scibert"):
+        tokenizer = AutoTokenizer.from_pretrained(cache_scibert(model_type))
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_type)
+
+    model = get_model(model_type, num_layers, all_layers)
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+
+    if not idf:
+        idf_dict = defaultdict(lambda: 1.0)
+        # set idf for [SEP] and [CLS] to 0
+        idf_dict[tokenizer.sep_token_id] = 0
+        idf_dict[tokenizer.cls_token_id] = 0
+    elif isinstance(idf, dict):
+        if verbose:
+            print("using predefined IDF dict...")
+        idf_dict = idf
+    else:
+        if verbose:
+            print("preparing IDF dict...")
+        start = time.perf_counter()
+        idf_dict = get_idf_dict(refs_without_repeats, tokenizer, nthreads=nthreads)
+        if verbose:
+            print("done in {:.2f} seconds".format(time.perf_counter() - start))
+
+    return {'tokenizer': tokenizer, 'model': model, 'idf_dict': idf_dict}
 
 
 def score(
@@ -41,6 +120,7 @@ def score(
     lang=None,
     return_hash=False,
     rescale_with_baseline=False,
+    load_setup=None,
 ):
     """
     BERTScore metric.
@@ -97,32 +177,37 @@ def score(
     if num_layers is None:
         num_layers = model2layers[model_type]
 
-    if model_type.startswith("scibert"):
-        tokenizer = AutoTokenizer.from_pretrained(cache_scibert(model_type))
+    if load_setup is not None:
+        tokenizer = load_setup['tokenizer']
+        model = load_setup['model']
+        idf_dict = load_setup['idf_dict']
     else:
-        tokenizer = AutoTokenizer.from_pretrained(model_type)
+        if model_type.startswith("scibert"):
+            tokenizer = AutoTokenizer.from_pretrained(cache_scibert(model_type))
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(model_type)
 
-    model = get_model(model_type, num_layers, all_layers)
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
+        model = get_model(model_type, num_layers, all_layers)
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        model.to(device)
 
-    if not idf:
-        idf_dict = defaultdict(lambda: 1.0)
-        # set idf for [SEP] and [CLS] to 0
-        idf_dict[tokenizer.sep_token_id] = 0
-        idf_dict[tokenizer.cls_token_id] = 0
-    elif isinstance(idf, dict):
-        if verbose:
-            print("using predefined IDF dict...")
-        idf_dict = idf
-    else:
-        if verbose:
-            print("preparing IDF dict...")
-        start = time.perf_counter()
-        idf_dict = get_idf_dict(refs, tokenizer, nthreads=nthreads)
-        if verbose:
-            print("done in {:.2f} seconds".format(time.perf_counter() - start))
+        if not idf:
+            idf_dict = defaultdict(lambda: 1.0)
+            # set idf for [SEP] and [CLS] to 0
+            idf_dict[tokenizer.sep_token_id] = 0
+            idf_dict[tokenizer.cls_token_id] = 0
+        elif isinstance(idf, dict):
+            if verbose:
+                print("using predefined IDF dict...")
+            idf_dict = idf
+        else:
+            if verbose:
+                print("preparing IDF dict...")
+            start = time.perf_counter()
+            idf_dict = get_idf_dict(refs, tokenizer, nthreads=nthreads)
+            if verbose:
+                print("done in {:.2f} seconds".format(time.perf_counter() - start))
 
     if verbose:
         print("calculating scores...")
