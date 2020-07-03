@@ -413,7 +413,7 @@ def bert_cos_score_idf(
             return base < lens.unsqueeze(1)
 
         pad_mask = length_to_mask(lens).to(device)
-        print('Devices: ', emb_pad.device, pad_mask.device, idf_pad.device)
+        print('Devices:', emb_pad.device, pad_mask.device, idf_pad.device)
         return emb_pad, pad_mask, idf_pad
 
     device = next(model.parameters()).device
