@@ -397,9 +397,9 @@ def bert_cos_score_idf(
         import ipdb; ipdb.set_trace()
         emb, idf = zip(*stats)
         start_time = time()
-        emb.to(device)
+        emb = [e.to(device) for e in emb]
         print(time() - start_time, 'emb.to(device)'); start_time = time()
-        idf.to(device)
+        idf = [i.to(device) for i in idf]
         print(time() - start_time, 'idf.to(device)')
         lens = [e.size(0) for e in emb]
         start_time = time()
