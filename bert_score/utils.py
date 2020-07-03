@@ -295,7 +295,6 @@ def greedy_cos_idf(ref_embedding, ref_masks, ref_idf, hyp_embedding, hyp_masks, 
         - :param: `hyp_idf` (torch.Tensor): BxK, idf score of each word
                    piece in the candidate setence
     """
-    import ipdb; ipdb.set_trace()
     ref_embedding.div_(torch.norm(ref_embedding, dim=-1).unsqueeze(-1))
     hyp_embedding.div_(torch.norm(hyp_embedding, dim=-1).unsqueeze(-1))
 
@@ -414,17 +413,13 @@ def bert_cos_score_idf(
     if verbose:
         print("computing greedy matching.")
         iter_range = tqdm(iter_range)
-    import ipdb; ipdb.set_trace()
     with torch.no_grad():
         for batch_start in iter_range:
             batch_refs = refs[batch_start : batch_start + matching_batch_size]
             batch_hyps = hyps[batch_start : batch_start + matching_batch_size]
-            print('Making batch refs...')
             ref_stats = pad_batch_stats(batch_refs, stats_dict, device)
-            print('Making batch hyps...')
             hyp_stats = pad_batch_stats(batch_hyps, stats_dict, device)
 
-            print('greedy_cos_idf...')
             P, R, F1 = greedy_cos_idf(*ref_stats, *hyp_stats, all_layers)
             preds.append(torch.stack((P, R, F1), dim=-1).cpu())
     preds = torch.cat(preds, dim=1 if all_layers else 0)
