@@ -414,6 +414,7 @@ def bert_cos_score_idf(
     if verbose:
         print("computing greedy matching.")
         iter_range = tqdm(iter_range)
+    import ipdb; ipdb.set_trace()
     with torch.no_grad():
         for batch_start in iter_range:
             batch_refs = refs[batch_start : batch_start + matching_batch_size]
