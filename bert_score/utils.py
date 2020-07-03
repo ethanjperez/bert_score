@@ -295,55 +295,63 @@ def greedy_cos_idf(ref_embedding, ref_masks, ref_idf, hyp_embedding, hyp_masks, 
         - :param: `hyp_idf` (torch.Tensor): BxK, idf score of each word
                    piece in the candidate setence
     """
-    ref_embedding.div_(torch.norm(ref_embedding, dim=-1).unsqueeze(-1))
-    hyp_embedding.div_(torch.norm(hyp_embedding, dim=-1).unsqueeze(-1))
+    with torch.no_grad():
+        print('ref_embedding.div_(torch.norm(ref_embedding, dim=-1).unsqueeze(-1))')
+        ref_embedding.div_(torch.norm(ref_embedding, dim=-1).unsqueeze(-1))
+        hyp_embedding.div_(torch.norm(hyp_embedding, dim=-1).unsqueeze(-1))
 
-    if all_layers:
-        B, _, L, D = hyp_embedding.size()
-        hyp_embedding = hyp_embedding.transpose(1, 2).transpose(0, 1).contiguous().view(L * B, hyp_embedding.size(1), D)
-        ref_embedding = ref_embedding.transpose(1, 2).transpose(0, 1).contiguous().view(L * B, ref_embedding.size(1), D)
-    batch_size = ref_embedding.size(0)
-    sim = torch.bmm(hyp_embedding, ref_embedding.transpose(1, 2))
-    masks = torch.bmm(hyp_masks.unsqueeze(2).float(), ref_masks.unsqueeze(1).float())
-    if all_layers:
-        masks = masks.unsqueeze(0).expand(L, -1, -1, -1).contiguous().view_as(sim)
-    else:
-        masks = masks.expand(batch_size, -1, -1).contiguous().view_as(sim)
+        if all_layers:
+            print('hyp_embedding = hyp_embedding.transpose(1, 2).transpose(0, 1).contiguous().view(L * B, hyp_embedding.size(1), D)')
+            B, _, L, D = hyp_embedding.size()
+            hyp_embedding = hyp_embedding.transpose(1, 2).transpose(0, 1).contiguous().view(L * B, hyp_embedding.size(1), D)
+            ref_embedding = ref_embedding.transpose(1, 2).transpose(0, 1).contiguous().view(L * B, ref_embedding.size(1), D)
+        batch_size = ref_embedding.size(0)
+        print('sim = torch.bmm(hyp_embedding, ref_embedding.transpose(1, 2))')
+        sim = torch.bmm(hyp_embedding, ref_embedding.transpose(1, 2))
+        masks = torch.bmm(hyp_masks.unsqueeze(2).float(), ref_masks.unsqueeze(1).float())
+        print('if all_layers:')
+        if all_layers:
+            masks = masks.unsqueeze(0).expand(L, -1, -1, -1).contiguous().view_as(sim)
+        else:
+            masks = masks.expand(batch_size, -1, -1).contiguous().view_as(sim)
 
-    masks = masks.float().to(sim.device)
-    sim = sim * masks
+        masks = masks.float().to(sim.device)
+        sim = sim * masks
 
-    word_precision = sim.max(dim=2)[0]
-    word_recall = sim.max(dim=1)[0]
+        word_precision = sim.max(dim=2)[0]
+        word_recall = sim.max(dim=1)[0]
 
-    hyp_idf.div_(hyp_idf.sum(dim=1, keepdim=True))
-    ref_idf.div_(ref_idf.sum(dim=1, keepdim=True))
-    precision_scale = hyp_idf.to(word_precision.device)
-    recall_scale = ref_idf.to(word_recall.device)
-    if all_layers:
-        precision_scale = precision_scale.unsqueeze(0).expand(L, B, -1).contiguous().view_as(word_precision)
-        recall_scale = recall_scale.unsqueeze(0).expand(L, B, -1).contiguous().view_as(word_recall)
-    P = (word_precision * precision_scale).sum(dim=1)
-    R = (word_recall * recall_scale).sum(dim=1)
-    F = 2 * P * R / (P + R)
+        hyp_idf.div_(hyp_idf.sum(dim=1, keepdim=True))
+        ref_idf.div_(ref_idf.sum(dim=1, keepdim=True))
+        print('precision_scale = hyp_idf.to(word_precision.device)')
+        precision_scale = hyp_idf.to(word_precision.device)
+        recall_scale = ref_idf.to(word_recall.device)
+        if all_layers:
+            print('precision_scale = precision_scale.unsqueeze(0).expand(L, B, -1).contiguous().view_as(word_precision)')
+            precision_scale = precision_scale.unsqueeze(0).expand(L, B, -1).contiguous().view_as(word_precision)
+            recall_scale = recall_scale.unsqueeze(0).expand(L, B, -1).contiguous().view_as(word_recall)
+        print('P = (word_precision * precision_scale).sum(dim=1)')
+        P = (word_precision * precision_scale).sum(dim=1)
+        R = (word_recall * recall_scale).sum(dim=1)
+        F = 2 * P * R / (P + R)
 
-    hyp_zero_mask = hyp_masks.sum(dim=1).eq(2)
-    ref_zero_mask = ref_masks.sum(dim=1).eq(2)
+        hyp_zero_mask = hyp_masks.sum(dim=1).eq(2)
+        ref_zero_mask = ref_masks.sum(dim=1).eq(2)
 
-    if all_layers:
-        P = P.view(L, B)
-        R = R.view(L, B)
-        F = F.view(L, B)
+        if all_layers:
+            P = P.view(L, B)
+            R = R.view(L, B)
+            F = F.view(L, B)
 
-    if torch.any(hyp_zero_mask):
-        print("Warning: Empty candidate sentence detected; setting precision to be 0.", file=sys.stderr)
-        P = P.masked_fill(hyp_zero_mask, 0.0)
+        if torch.any(hyp_zero_mask):
+            print("Warning: Empty candidate sentence detected; setting precision to be 0.", file=sys.stderr)
+            P = P.masked_fill(hyp_zero_mask, 0.0)
 
-    if torch.any(ref_zero_mask):
-        print("Warning: Empty reference sentence detected; setting recall to be 0.", file=sys.stderr)
-        R = R.masked_fill(ref_zero_mask, 0.0)
+        if torch.any(ref_zero_mask):
+            print("Warning: Empty reference sentence detected; setting recall to be 0.", file=sys.stderr)
+            R = R.masked_fill(ref_zero_mask, 0.0)
 
-    F = F.masked_fill(torch.isnan(F), 0.0)
+        F = F.masked_fill(torch.isnan(F), 0.0)
 
     return P, R, F
 
@@ -408,20 +416,20 @@ def bert_cos_score_idf(
         return emb_pad.to(device), pad_mask.to(device), idf_pad.to(device)
 
     device = next(model.parameters()).device
-    matching_batch_size = batch_size * 4
+    matching_batch_size = batch_size * 2
     iter_range = range(0, len(refs), matching_batch_size)
     if verbose:
         print("computing greedy matching.")
         iter_range = tqdm(iter_range)
-    with torch.no_grad():
-        for batch_start in iter_range:
-            batch_refs = refs[batch_start : batch_start + matching_batch_size]
-            batch_hyps = hyps[batch_start : batch_start + matching_batch_size]
-            ref_stats = pad_batch_stats(batch_refs, stats_dict, device)
-            hyp_stats = pad_batch_stats(batch_hyps, stats_dict, device)
 
-            P, R, F1 = greedy_cos_idf(*ref_stats, *hyp_stats, all_layers)
-            preds.append(torch.stack((P, R, F1), dim=-1).cpu())
+    for batch_start in iter_range:
+        batch_refs = refs[batch_start : batch_start + matching_batch_size]
+        batch_hyps = hyps[batch_start : batch_start + matching_batch_size]
+        ref_stats = pad_batch_stats(batch_refs, stats_dict, device)
+        hyp_stats = pad_batch_stats(batch_hyps, stats_dict, device)
+
+        P, R, F1 = greedy_cos_idf(*ref_stats, *hyp_stats, all_layers)
+        preds.append(torch.stack((P, R, F1), dim=-1).cpu())
     preds = torch.cat(preds, dim=1 if all_layers else 0)
     return preds
 
