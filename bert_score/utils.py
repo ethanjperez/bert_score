@@ -395,15 +395,10 @@ def bert_cos_score_idf(
     def pad_batch_stats(sen_batch, stats_dict, device):
         stats = [stats_dict[s] for s in sen_batch]
         emb, idf = zip(*stats)
-        start_time = time()
         emb = [e.to(device) for e in emb]
-        print(time() - start_time, 'emb.to(device)'); start_time = time()
         idf = [i.to(device) for i in idf]
-        print(time() - start_time, 'idf.to(device)')
         lens = [e.size(0) for e in emb]
-        start_time = time()
         emb_pad = pad_sequence(emb, batch_first=True, padding_value=2.0)
-        print(time() - start_time, 'emb_pad = pad_sequence(emb, batch_first=True, padding_value=2.0)')
         idf_pad = pad_sequence(idf, batch_first=True)
 
         def length_to_mask(lens):
@@ -413,7 +408,6 @@ def bert_cos_score_idf(
             return base < lens.unsqueeze(1)
 
         pad_mask = length_to_mask(lens).to(device)
-        print('Devices:', emb_pad.device, pad_mask.device, idf_pad.device)
         return emb_pad, pad_mask, idf_pad
 
     device = next(model.parameters()).device
@@ -427,12 +421,9 @@ def bert_cos_score_idf(
         for batch_start in iter_range:
             batch_refs = refs[batch_start : batch_start + matching_batch_size]
             batch_hyps = hyps[batch_start : batch_start + matching_batch_size]
-            print('\n***ref_stats = pad_batch_stats(batch_refs, stats_dict, device)')
             ref_stats = pad_batch_stats(batch_refs, stats_dict, device)
-            print('\n***hyp_stats = pad_batch_stats(batch_hyps, stats_dict, device)')
             hyp_stats = pad_batch_stats(batch_hyps, stats_dict, device)
 
-            print('\n***P, R, F1 = greedy_cos_idf(*ref_stats, *hyp_stats, all_layers)')
             P, R, F1 = greedy_cos_idf(*ref_stats, *hyp_stats, all_layers)
             preds.append(torch.stack((P, R, F1), dim=-1).cpu())
     preds = torch.cat(preds, dim=1 if all_layers else 0)
