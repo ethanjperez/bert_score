@@ -6,7 +6,7 @@ from itertools import chain
 from collections import defaultdict, Counter
 from multiprocessing import Pool
 from functools import partial
-from time import time()
+from time import time
 from tqdm.auto import tqdm
 from torch.nn.utils.rnn import pad_sequence
 
