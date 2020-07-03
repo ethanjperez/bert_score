@@ -143,6 +143,7 @@ def score(
                   multiple references, the returned score of this candidate is 
                   the *best* score among all references.
     """
+    import ipdb; ipdb.set_trace()
     assert len(cands) == len(refs), "Different number of candidates and references"
 
     assert lang is not None or model_type is not None, "Either lang or model_type should be specified"
