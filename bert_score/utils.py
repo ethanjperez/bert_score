@@ -394,6 +394,7 @@ def bert_cos_score_idf(
 
     def pad_batch_stats(sen_batch, stats_dict, device):
         stats = [stats_dict[s] for s in sen_batch]
+        import ipdb; ipdb.set_trace()
         emb, idf = zip(*stats)
         start_time = time()
         emb.to(device)
