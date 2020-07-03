@@ -411,7 +411,7 @@ def bert_cos_score_idf(
         return emb_pad, pad_mask, idf_pad
 
     device = next(model.parameters()).device
-    matching_batch_size = batch_size * 4
+    matching_batch_size = batch_size * 2
     iter_range = range(0, len(refs), matching_batch_size)
     if verbose:
         print("computing greedy matching.")
