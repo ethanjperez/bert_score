@@ -343,6 +343,7 @@ def greedy_cos_idf(ref_embedding, ref_masks, ref_idf, hyp_embedding, hyp_masks, 
             R = R.view(L, B)
             F = F.view(L, B)
 
+        print('P = P.masked_fill(hyp_zero_mask, 0.0)')
         if torch.any(hyp_zero_mask):
             print("Warning: Empty candidate sentence detected; setting precision to be 0.", file=sys.stderr)
             P = P.masked_fill(hyp_zero_mask, 0.0)
@@ -353,6 +354,7 @@ def greedy_cos_idf(ref_embedding, ref_masks, ref_idf, hyp_embedding, hyp_masks, 
 
         F = F.masked_fill(torch.isnan(F), 0.0)
 
+    print('return P, R, F')
     return P, R, F
 
 
@@ -425,9 +427,12 @@ def bert_cos_score_idf(
     for batch_start in iter_range:
         batch_refs = refs[batch_start : batch_start + matching_batch_size]
         batch_hyps = hyps[batch_start : batch_start + matching_batch_size]
+        print('ref_stats = pad_batch_stats(batch_refs, stats_dict, device)')
         ref_stats = pad_batch_stats(batch_refs, stats_dict, device)
+        print('hyp_stats = pad_batch_stats(batch_hyps, stats_dict, device)')
         hyp_stats = pad_batch_stats(batch_hyps, stats_dict, device)
 
+        print('P, R, F1 = greedy_cos_idf(*ref_stats, *hyp_stats, all_layers)')
         P, R, F1 = greedy_cos_idf(*ref_stats, *hyp_stats, all_layers)
         preds.append(torch.stack((P, R, F1), dim=-1).cpu())
     preds = torch.cat(preds, dim=1 if all_layers else 0)
