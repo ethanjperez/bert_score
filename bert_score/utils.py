@@ -6,6 +6,7 @@ from itertools import chain
 from collections import defaultdict, Counter
 from multiprocessing import Pool
 from functools import partial
+from time import time()
 from tqdm.auto import tqdm
 from torch.nn.utils.rnn import pad_sequence
 
@@ -392,11 +393,16 @@ def bert_cos_score_idf(
             stats_dict[sen] = (emb, idf)
 
     def pad_batch_stats(sen_batch, stats_dict, device):
+        start_time = time()
         stats = [stats_dict[s] for s in sen_batch]
+        print(time() - start_time, 'stats = [stats_dict[s] for s in sen_batch]'); start_time = time()
         emb, idf = zip(*stats)
         lens = [e.size(0) for e in emb]
+        print(time() - start_time, 'lens = [e.size(0) for e in emb]'); start_time = time()
         emb_pad = pad_sequence(emb, batch_first=True, padding_value=2.0)
+        print(time() - start_time, 'emb_pad = pad_sequence(emb, batch_first=True, padding_value=2.0)'); start_time = time()
         idf_pad = pad_sequence(idf, batch_first=True)
+        print(time() - start_time, 'idf_pad = pad_sequence(idf, batch_first=True)'); start_time = time()
 
         def length_to_mask(lens):
             lens = torch.tensor(lens, dtype=torch.long)
@@ -405,8 +411,10 @@ def bert_cos_score_idf(
             return base < lens.unsqueeze(1)
 
         pad_mask = length_to_mask(lens)
-        print('Moving to device...')
-        return emb_pad.to(device), pad_mask.to(device), idf_pad.to(device)
+        print(time() - start_time, 'pad_mask = length_to_mask(lens)'); start_time = time()
+        emb_pad.to(device), pad_mask.to(device), idf_pad.to(device)
+        print(time() - start_time, 'emb_pad.to(device), pad_mask.to(device), idf_pad.to(device)')
+        return emb_pad, pad_mask, idf_pad
 
     device = next(model.parameters()).device
     matching_batch_size = batch_size * 2
